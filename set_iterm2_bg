@@ -1,0 +1,146 @@
+#!/bin/bash
+# ----------------------------------------------------------------------------
+# Overlay iTerm2 background image with Host and IP Address
+# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Parameters for overlay text colour and location
+# ----------------------------------------------------------------------------
+# Font 
+readonly FONT="$HOME/Dropbox/System Setup Files/Fonts/Inconsolata/Inconsolata.otf"
+readonly FONT_STYLE="Normal"      # Font style (Any, Italic, Normal, Oblique)
+readonly HOST_FONT_SIZE="60"      # Host font size in points
+readonly IP_FONT_SIZE="40"        # IP address font size in points
+# Text Colours
+readonly BG_COLOR="#052833"       # Background colour
+readonly FG_COLOR="#aaaaaa"       # Foreground colour
+# Text location
+readonly GRAVITY="NorthEast"      # Text gravity (NorthWest, North, NorthEast,
+                                  # West, Center, East, SouthWest, South, SouthEast)
+readonly OFFSET1="20,10"          # Text offset
+readonly OFFSET2="20,75"          # Text offset
+
+readonly PROGNAME=$(basename "$0")
+
+# ----------------------------------------------------------------------------
+# Functions
+# ----------------------------------------------------------------------------
+usage() {
+    cat <<- EOF
+
+    usage: $PROGNAME [-H <host name>] [-i <IP address>]
+
+    Script overlays host name and ip address on iTerm2 background image. If no
+    options provided script will apply local host and IP address.
+
+    OPTIONS:
+        -H --hostname           host name to apply
+        -i --ipaddress          IP address to apply
+        -h --help               show this help
+
+
+EOF
+    exit 0
+}
+
+cmdline() {
+    while getopts "hH:i:-:" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    help) 
+                        usage
+                        exit 2
+                        ;;
+                    hostname=*)
+                        __HOSTNAME="$OPTARG"
+                        ;;
+                    ipaddress=*)
+                        __IPADDRESS="$OPTARG"
+                        ;;
+                    *)
+                        if [ "$OPTERR" = 1 ] && [ "${optspec:0:1}" != ":" ]; then
+                            echo "Unknown option --${OPTARG}" >&2
+                            usage
+                        fi
+                        ;;
+                esac;;
+            h)  # Help! display usage.
+                usage
+                exit 2
+                ;;
+            H)  # Host & IP
+                __HOSTNAME="$OPTARG"
+                ;;
+            i)  # IP address
+                __IPADDRESS="$OPTARG"
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                    usage
+                fi
+                ;;
+        esac
+    done
+
+}
+
+set_bg() {
+    osascript -e "
+        tell application \"iTerm\"
+            tell current window
+                try
+                    tell current session
+                          set background image to \"$1\"
+                    end tell
+                    on error errmesg number errn
+                end try
+            end tell
+        end tell"
+}
+
+get_bg() {
+    if [[ "$TERM_PROGRAM" = "iTerm.app" && -e /usr/bin/osascript ]]; then
+        BG_IMAGE=$(/usr/bin/osascript -e "
+            tell application \"iTerm\"
+                tell current window
+                    try
+                        tell current session
+                            get background image
+                        end tell
+                        on error errmesg number errn
+                    end try
+                end tell
+            end tell
+        ")
+    echo "$BG_IMAGE"
+    fi
+}
+
+cleanup() {
+    rm -f "/tmp/iTermBG.$$.png" 2&>/dev/null
+}
+trap cleanup EXIT
+
+# ----------------------------------------------------------------------------
+# Main code
+# ----------------------------------------------------------------------------
+if [[ -z $(which convert) ]]; then
+    echo "Unable to find 'convert' utility. Do you have ImageMagick installed?"
+    echo ""
+    exit 1
+fi
+
+cmdline "$@"
+
+ITERM_BG_IMAGE=${ITERM_BG_IMAGE:-$( get_bg )}
+__IPADDRESS=${__IPADDRESS:-$( ipconfig getifaddr en0 )}
+__HOSTNAME=${__HOSTNAME:-$HOSTNAME}
+
+convert "$ITERM_BG_IMAGE" \
+    -gravity "$GRAVITY" -fill "$FG_COLOR" -font "$FONT" -style "$FONT_STYLE" \
+    -pointsize "$HOST_FONT_SIZE" -antialias -draw "text $OFFSET1 '$__HOSTNAME'" \
+    -pointsize "$IP_FONT_SIZE" -draw "text $OFFSET2 '$__IPADDRESS'" \
+    "/tmp/iTermBG.$$.png"
+
+set_bg "/tmp/iTermBG.$$.png"
