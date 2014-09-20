@@ -88,10 +88,10 @@ cmdline() {
 set_bg() {
     osascript -e "
         tell application \"iTerm\"
-            tell current terminal
+            tell current window
                 try
                     tell current session
-                          set background image path to \"$1\"
+                          set background image to \"$1\"
                     end tell
                     on error errmesg number errn
                 end try
@@ -103,17 +103,16 @@ get_bg() {
     if [[ "$TERM_PROGRAM" = "iTerm.app" && -e /usr/bin/osascript ]]; then
         BG_IMAGE=$(/usr/bin/osascript -e "
             tell application \"iTerm\"
-                    tell current terminal
-                        try
-                            tell current session
-                                get background image path
-                            end tell
-                            on error errmesg number errn
-                        end try
-                    end tell
-            end tell"
-        )
-
+                tell current window
+                    try
+                        tell current session
+                            get background image
+                        end tell
+                        on error errmesg number errn
+                    end try
+                end tell
+            end tell
+        ")
     echo "$BG_IMAGE"
     fi
 }
@@ -134,10 +133,7 @@ fi
 
 cmdline "$@"
 
-if [[ ! -e "$ITERM_BG_IMAGE" ]]; then
-    ITERM_BG_IMAGE=$( get_bg )
-fi
-
+ITERM_BG_IMAGE=${ITERM_BG_IMAGE:-$( get_bg )}
 __IPADDRESS=${__IPADDRESS:-$( ipconfig getifaddr en0 )}
 __HOSTNAME=${__HOSTNAME:-$HOSTNAME}
 
